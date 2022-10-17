@@ -2,9 +2,13 @@ from sentinelhub import DataCollection
 
 from odc_sh import engine
 
-dc = engine.Datacube()
+sh_client_id=""
+sh_client_secret=""
 
-p = dc.list_products()
+dc = engine.Datacube(sh_client_id=sh_client_id, sh_client_secret=sh_client_secret)
+
+p = dc.list_sh_products()
+
 
 resolution = 100  # in meters
 longitude = (12.181599, 14.878371)
@@ -15,7 +19,7 @@ time = ("2019-01-01", "2019-01-04")
 dc.list_products
 
 ds = dc.load(
-    product=DataCollection.SENTINEL2_L1C.api_id,
+    product=DataCollection.SENTINEL2_L1C,
     measurements=["B01"],
     latitude=latitude,
     longitude=longitude,

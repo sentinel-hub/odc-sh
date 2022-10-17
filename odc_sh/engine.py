@@ -10,10 +10,11 @@ import xarray as xr
 from datacube.api.query import Query
 from datacube.index.hl import prep_eo3
 from sentinelhub import (CRS, BBox, BBoxSplitter, SentinelHubCatalog,
-                         SentinelHubDownloadClient, SHConfig,
+                         SentinelHubDownloadClient, SHConfig, SentinelHubBYOC,
                          bbox_to_dimensions, DataCollection)
 
-from sentinelhub.exceptions import SHUserWarning
+from sentinelhub.data_collections import DataCollectionDefinition, ServiceUrl
+from sentinelhub.data_collections_bands import Band, Unit
 
 from .utils import (build_sentinel_hub_request, features_to_dates,
                     get_catalog_results, get_evalscript, getCollection)
@@ -76,7 +77,6 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                 y2 = extent["lat"]["end"]
 
                 print("---------------------------------------------")
-                sh_filter = dataset.metadata_doc["properties"]["sh_filter"]
                 sh_resolution = dataset.metadata_doc["properties"]["sh_resolution"]
                 time = dataset.metadata_doc["properties"]["datetime"]
                 bands = list(dataset.metadata_doc["measurements"].values())
@@ -85,11 +85,8 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                 band_units = [m.units for m in bands]
                 band_sample_types = [m.dtype for m in bands]
 
-                print(dataset.type)
-
-                product_id = dataset.metadata_doc["properties"]["sh_product_api_id"]
-                collection = getCollection(product_id, sh_filter)
-
+                collection = dataset.metadata_doc["properties"]["sh_collection"]
+                
                 print(
                     f"longitude: {x1}, {x2} \
                     - latitude: {y1}, {y2} \
@@ -151,7 +148,7 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
     def is_sh_source(self, sources):
         for datasets in sources.values:
             for dataset in datasets:
-                if "properties" in dataset.metadata_doc and "sh_product_api_id" in dataset.metadata_doc["properties"]:
+                if "properties" in dataset.metadata_doc and "sh_collection" in dataset.metadata_doc["properties"]:
                         return True
         return False
         
@@ -255,8 +252,6 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         :param measurements: only defined measurements will be downloaded. If not specified, all the bands will be
                              included in the datacube
         :param sh_resolution: only return datasets that have locations
-        :param sh_filter: Additional search restrictions for some products
-                        (e.g. for Sentinel 1 filter={"swath_mode": "IW", "orbit_direction": "DESCENDING"})
         :param search_terms: additional search parameters
         :param limit: Default number of day slices to be loaded
         :return: A generated list of datacube.model.Dataset objects.
@@ -269,18 +264,13 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         if not product:
             raise ValueError("product needs to be defined")
             
-        print(product) 
-        print(type(product))
-
         query = Query(**search_terms)
         if isinstance(product, DataCollection):
             # verify SH Client credentials before loadind data
             self.validate_credentials()
             
             #only api id is needed
-            product = product.api_id
-            
-            query.product = self.index.products.get_by_name(product)
+            collection = product
             
             latitude = search_terms['latitude']
             longitude = search_terms['longitude']
@@ -292,14 +282,9 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
             except:
                 user_measurements = None            
             
-            try:
-                sh_filter = search_terms['sh_filter']
-            except:
-                sh_filter = None
-            
             if not sh_resolution:
                 raise ValueError("sh_resolution (m) is not defined")
-
+                
             if not latitude or not longitude:
                 raise Exception("Latitude or longitude is missing.")
 
@@ -314,28 +299,28 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                 crs=CRS.WGS84,
             )
             
-            if not query.product:
-                print("Searching for new products")
-                query.product = self.generate_product(
-                    product, user_measurements, sh_resolution, sh_filter
-                )
+            print("Searching for new products")
+            query.product = self.generate_product(
+                collection, user_measurements, sh_resolution
+            )
 
-                # Generate Datacube dataset documents from SH image data
-                search_iter = get_catalog_results(
-                    SentinelHubCatalog(config=self.config), product, bbox, time
-                )
-                image_metadata_list = list(search_iter)
-                dates = features_to_dates(image_metadata_list)
+            # Generate Datacube dataset documents from SH image data
+            search_iter = get_catalog_results(
+                SentinelHubCatalog(config=self.config), collection, bbox, time
+            )
+            image_metadata_list = list(search_iter)
+            dates = features_to_dates(image_metadata_list)
+            
+            if not dates:
+                raise ValueError(f"No data available for selected period: {time}")
 
-                for date in dates:
+            for date in dates:
                     dataset_metadata = self.make_img_doc(
-                        product,
+                        collection,
                         query.product.measurements,
-                        image_metadata_list[0],
                         date,
                         sh_resolution,
                         bbox,
-                        sh_filter,
                     )
                     ds_meta = prep_eo3(dataset_metadata)
                     dataset = datacube.model.Dataset(query.product, ds_meta, uris="")
@@ -355,25 +340,20 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                 
                 
     def make_img_doc(
-        self, product_id, measurements, image, date, sh_resolution, bbox, sh_filter
+        self, collection, measurements, date, sh_resolution, bbox
     ):
         transform = bbox.get_transform_vector(sh_resolution, sh_resolution)
         doc = {
             "id": str(uuid.uuid4()),
             "$schema": "https://schemas.opendatacube.org/dataset",
-            "product": {"name": product_id},
+            "product": {"name": collection.name},
             "crs": CRS.WGS84.ogc_string(),
             "properties": {
                 "odc:processing_datetime": date,
                 "odc:file_format": "tif",
-                "eo:platform": image["properties"]["platform"],
-                "eo:instrument": image["properties"]["instruments"][0],
-                "dtr:start_datetime": date,
-                "dtr:end_datetime": date,
                 "datetime": date,
                 "sh_resolution": sh_resolution,
-                "sh_filter": sh_filter,
-                "sh_product_api_id": product_id,
+                "sh_collection": collection,
             },
             "geometry": bbox.geojson,
             "measurements": measurements,
@@ -389,21 +369,18 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         return doc
 
     def generate_product(
-        self, product_id, user_measurements, sh_resolution, sh_filter=None
+        self, collection, user_measurements, sh_resolution
     ):
         """Generates an ODC product from SH datasource metadata.
         :param product_id: The product ID of the SH collection.
         :param user_measurements: Optional; List of predefined measurements selected by the user (can be None).
         :param sh_resolution: the desired output resolution of the product.
-        :param sh_filter: Optional; additional filter that specifies the extra restrictions on the
-        product (e. g.  filter={"swath_mode": "IW", "orbit_direction": "DESCENDING"}).
         :rtype: A datacube.model.DatasetType product.
         """
-        collection = getCollection(product_id, sh_filter)
-
+        
         if not collection:
             raise ValueError(
-                f"Sentinel collection with api id: {product_id} doesn't exist"
+                f"Sentinel collection was not defined"
             )
 
         self.config.sh_base_url = collection.service_url
@@ -428,8 +405,10 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                 resolution=dict(latitude=sh_resolution, longitude=sh_resolution),
             ),
         )
-
-        return self.index.products.from_doc(definition)
+        
+        prod_res = self.index.products.from_doc(definition)
+        print(f"Product created for {collection.name}")
+        return prod_res
 
     def get_measurements(self, collection, measurements=None):
         bands = collection.bands
@@ -497,3 +476,20 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
             return res[0]
         else:
             raise ValueError(f'Collection with name: {collection_name} does not exist.')
+            
+            
+    def get_BYOC_collection(self, collection_id):
+        byoc = SentinelHubBYOC(self.config)
+        my_collection = byoc.get_collection(collection_id)
+        
+        if not my_collection:
+            raise ValueError(f'Collection with id: {collection_id} does not exist.')
+        
+        collection_bands = my_collection["additionalData"]["bands"]
+        bands = tuple(
+            Band(band_name, (Unit.DN, ), (np.uint16, )) for band_name in collection_bands
+        )
+        
+        return DataCollection.define_byoc(my_collection["id"], name=my_collection["id"], bands=bands, service_url=ServiceUrl.MAIN)
+        
+  

@@ -4,14 +4,7 @@ from sentinelhub.type_utils import (JsonDict, Json)
 from sentinelhub.constants import RequestType
 from sentinelhub.api.batch.base import RequestSpec
 
-from CommercialDataBase import CommercialSearchResponse, T, BaseAirbusResponse
-from enum import Enum
-
-
-class Providers(Enum):
-    AIRBUS = "AIRBUS"
-    PLANET = "PLANET"
-    MAXAR = "MAXAR"
+from CommercialDataBase import CommercialSearchResponse, T, BaseAirbusResponse, ThumbnailType
 
 
 class BaseCommercialClient(SentinelHubService):
@@ -33,8 +26,17 @@ class SentinelHubCommercialData(BaseCommercialClient):
     def quotas(self, *args):
         return self.client.get_json_dict(url=self.url+"quotas" + self.check_arg(args), use_session=True)
 
-    def search(self, payload, **kwargs) -> CommercialSearchResponse:
+    def search(self, payload) -> CommercialSearchResponse:
         response_info: CommercialSearchResponse = CommercialSearchResponse.from_dict(self._call_job("search", payload))
+        return response_info
+
+    def native_search(self, payload) -> CommercialSearchResponse:
+        response_info: CommercialSearchResponse = CommercialSearchResponse.from_dict(self._call_job("nativesearch", payload))
+        return response_info
+
+    def thumbnail(self, provider_type: ThumbnailType, item_id):
+        response_info = self.client.get_json_dict(url=self.url + f"collections/{provider_type}/products/{item_id}/thumbnail",
+                                                  request_type=RequestType.GET, use_session=True)
         return response_info
 
     def create_order(self, payload):

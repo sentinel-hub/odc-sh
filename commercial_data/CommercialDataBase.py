@@ -1,5 +1,6 @@
 import datetime as dt
 from abc import ABCMeta
+from enum import Enum
 
 from dataclasses_json import CatchAll, LetterCase, Undefined
 from dataclasses_json import config as dataclass_config
@@ -11,6 +12,26 @@ from typing import List, Optional, TypeVar, Generic, Type
 from sentinelhub.type_utils import JsonDict
 
 Self = TypeVar("Self")
+
+
+class Providers(Enum):
+    AIRBUS = "AIRBUS"
+    PLANET = "PLANET"
+    MAXAR = "MAXAR"
+
+
+class AirbusType(Enum):
+    SPOT = "SPOT"
+    PLEIADES = "PHR"
+
+
+class ThumbnailType(Enum):
+    SPOT = "AIRBUS_SPOT"
+    PLEIADES = "AIRBUS_PLEIADES"
+    SCOPE = "PLANET_SCOPE"
+    SKYSAT = "PLANET_SKYSAT"
+    MAXAR = "MAXAR_WORLDVIEW"
+
 
 
 class CommercialResponse(metaclass=ABCMeta):

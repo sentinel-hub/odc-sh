@@ -1,5 +1,6 @@
-from sentinelhub import DataCollection
+import os
 from odc_sh import engine
+from sentinelhub import DataCollection
 
 sh_client_id=""
 sh_client_secret=""

@@ -4,6 +4,12 @@ from odc_sh import engine
 sh_client_id=""
 sh_client_secret=""
 
+if not sh_client_id:
+    sh_client_id =  os.environ['SH_CLIENT_ID'] 
+
+if not sh_client_secret:
+    sh_client_secret = os.environ['SH_CLIENT_SECRET'] 
+
 dc = engine.Datacube(sh_client_id=sh_client_id, sh_client_secret=sh_client_secret)
 
 p = dc.list_products()

@@ -7,11 +7,28 @@ from dataclasses_json import config as dataclass_config
 from dataclasses_json import dataclass_json
 from dataclasses import dataclass, field
 from sentinelhub.api.utils import datetime_config
-from typing import List, Optional, TypeVar, Generic, Type
+from typing import List, Optional, TypeVar, Generic, Type, Union
 
 from sentinelhub.type_utils import JsonDict
 
 Self = TypeVar("Self")
+
+class Bundles(Enum):
+    ANALYTIC_UDM2 = "analytic_udm2"
+    ANALYTIC_SR_UDM2 = "analytic_sr_udm2"
+
+
+class SkySatBundleE(Enum):
+    PANCHROMATIC = "panchromatic"
+
+
+class ScopeBundleE(Enum):
+    ANALYTIC_8B_UDM2 = "analytic_8b_udm2"
+    ANALYTIC_8B_SR_UDM2 = "analytic_8b_sr_udm2"
+
+
+SkySatBundle = Union[Bundles, SkySatBundleE]
+ScopeBundle = Union[Bundles, ScopeBundleE]
 
 
 class Providers(Enum):
@@ -20,9 +37,16 @@ class Providers(Enum):
     MAXAR = "MAXAR"
 
 
-class AirbusType(Enum):
+class AirbusConstellation(Enum):
     SPOT = "SPOT"
     PLEIADES = "PHR"
+
+class SkySatType(Enum):
+    SkySatScene = "SkySatScene"
+    SkySatCollect = "SkySatCollect"
+
+class ScopeType(Enum):
+    PSScene = "PSScene"
 
 
 class ThumbnailType(Enum):
@@ -31,6 +55,7 @@ class ThumbnailType(Enum):
     SCOPE = "PLANET_SCOPE"
     SKYSAT = "PLANET_SKYSAT"
     MAXAR = "MAXAR_WORLDVIEW"
+
 
 
 
@@ -84,15 +109,15 @@ class AirbusResponseProperties:
     workspace_title: Optional[str] = None
 
 
-@dataclass_json(letter_case=LetterCase.CAMEL, undefined=Undefined.EXCLUDE)
+@dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(repr=False)
 class BaseAirbusResponse(CommercialResponse): # noqa
 
-    _links: str
+    _links: dict[str, dict[str]]
     geometry: dict[str, List[List[int]]]
-    properties: Optional[AirbusResponseProperties]
-    rights: dict[dict, dict, dict]
-    type: str
+   # properties: Optional[AirbusResponseProperties]
+   # rights: dict[dict, dict, dict]
+   # type: str
 
 
 T = TypeVar("T", BaseAirbusResponse, str)

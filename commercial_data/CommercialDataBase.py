@@ -13,37 +13,35 @@ from sentinelhub.type_utils import JsonDict
 
 Self = TypeVar("Self")
 
-class Bundles(Enum):
+
+class SkySatBundle(Enum):
     ANALYTIC_UDM2 = "analytic_udm2"
     ANALYTIC_SR_UDM2 = "analytic_sr_udm2"
-
-
-class SkySatBundleE(Enum):
     PANCHROMATIC = "panchromatic"
 
 
-class ScopeBundleE(Enum):
+class ScopeBundle(Enum):
+    ANALYTIC_UDM2 = "analytic_udm2"
+    ANALYTIC_SR_UDM2 = "analytic_sr_udm2"
     ANALYTIC_8B_UDM2 = "analytic_8b_udm2"
     ANALYTIC_8B_SR_UDM2 = "analytic_8b_sr_udm2"
-
-
-SkySatBundle = Union[Bundles, SkySatBundleE]
-ScopeBundle = Union[Bundles, ScopeBundleE]
 
 
 class Providers(Enum):
     AIRBUS = "AIRBUS"
     PLANET = "PLANET"
-    MAXAR = "MAXAR"
+    WORLDVIEW = "MAXAR"
 
 
 class AirbusConstellation(Enum):
     SPOT = "SPOT"
     PLEIADES = "PHR"
 
+
 class SkySatType(Enum):
     SkySatScene = "SkySatScene"
     SkySatCollect = "SkySatCollect"
+
 
 class ScopeType(Enum):
     PSScene = "PSScene"
@@ -54,9 +52,21 @@ class ThumbnailType(Enum):
     PLEIADES = "AIRBUS_PLEIADES"
     SCOPE = "PLANET_SCOPE"
     SKYSAT = "PLANET_SKYSAT"
-    MAXAR = "MAXAR_WORLDVIEW"
+    WORLDVIEW = "MAXAR_WORLDVIEW"
 
 
+class WorldViewKernel(Enum):
+    CubicConvolution = "CC"
+    NearestNeighbour = "NN"
+    MTF = "MTF"
+
+
+class WorldViewSensor(Enum):
+    WV01 = "WV01"
+    WV02 = "WV02"
+    WV03 = "WV03"
+    WV04 = "WV04"
+    GE01 = "GE01"
 
 
 class CommercialResponse(metaclass=ABCMeta):

@@ -17,7 +17,7 @@ class BaseCommercialClient(SentinelHubService):
                                          use_session=True)
 
     def get_bounds(self, bounds: Any):
-        btype = "geometry" if type(dict) is list else "bbox"
+        btype = "geometry" if type(bounds) is dict else "bbox"
         return dict(zip([btype], [bounds]))
 
     def search(self, payload) -> CommercialSearchResponse:

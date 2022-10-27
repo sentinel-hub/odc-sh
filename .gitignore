@@ -1,3 +1,4 @@
 *.pyc
 odc_sh.egg-info/
 odc_sh.__pycache__/
+build/

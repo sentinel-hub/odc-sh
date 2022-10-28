@@ -1,12 +1,10 @@
 from sentinelhub.api.base import SentinelHubService
-from typing import List, Optional, TypeVar, Generic, Type, Any, Union
+from typing import Any, Union
 from sentinelhub.type_utils import (JsonDict, Json)
 from sentinelhub.constants import RequestType
-from sentinelhub.api.batch.base import RequestSpec
 
-from .commercial_data_base import CommercialSearchResponse, T, BaseAirbusResponse, ThumbnailType, \
+from .commercial_data_base import CommercialSearchResponse, ThumbnailType, \
     AirbusConstellation, Providers, ScopeType, ScopeBundle, SkySatBundle, SkySatType, WorldViewKernel
-
 
 class BaseCommercialClient(SentinelHubService):
 
@@ -84,9 +82,9 @@ class SentinelHubCommercialData(BaseCommercialClient):
         return self.search(payload), payload
 
     def thumbnail(self, provider_type: ThumbnailType, item_id):
-        response_info = self.client.get_json_dict(url=self.url + f"collections/{provider_type}/products/{item_id}/thumbnail",
+        download_request = DownloadRequest(url=self.service_url + f"/collections/{provider_type.value}/products/{item_id}/thumbnail",
                                                   request_type=RequestType.GET, use_session=True)
-        return response_info
+        return self.client.download(download_requests=download_request, decode_data=False)
 
     def order(self, name: str, collection_id: str, query: dict, **kwargs):
         provider = query["provider"]
@@ -116,16 +114,22 @@ class SentinelHubCommercialData(BaseCommercialClient):
         return response_info
 
     def delete_order(self, id_order):
-        response_info = self.client.get_json(url=self.service_url + "/orders/" + id_order,
+        try:
+            self.client.get_json(url=self.service_url + "/orders/" + id_order,
                                              request_type=RequestType.DELETE, use_session=True)
-        return response_info
+            return f"Order deleted. {id_order}"
+        except:
+            return "Order not found!"
 
     def confirm_order(self, id_order):
-        response_info = self.client.get_json(url=self.service_url + "/orders/" + id_order + "/confirm",
-                                             request_type=RequestType.POST, use_session=True)
-        return response_info
+        try:
+            self.client.get_json(url=self.service_url + "/orders/" + id_order + "/confirm",
+                                 request_type=RequestType.POST, use_session=True)
+            return f"Order confirmed. {id_order}"
+        except:
+            return "Order not found!"
 
-    def get_collection(self, payload):
+    def get_collection(self, payload) -> JsonDict:
         response_info = self._call_job("orders/searchcompatiblecollections", payload)
         return response_info
 
@@ -136,5 +140,3 @@ class SentinelHubCommercialData(BaseCommercialClient):
             break
 
         return id
-
-

@@ -123,8 +123,11 @@ class AirbusResponseProperties:
 @dataclass(repr=False)
 class BaseAirbusResponse(CommercialResponse): # noqa
 
-    _links: 'dict[str, dict[str]]'
-    geometry: 'dict[str, List[List[int]]]'
+    _links: dict[str, dict[str]]
+    geometry: dict[str, List[List[int]]]
+   # properties: Optional[AirbusResponseProperties]
+   # rights: dict[dict, dict, dict]
+   # type: str
 
 
 T = TypeVar("T", BaseAirbusResponse, str)
@@ -140,6 +143,4 @@ class CommercialSearchResponse(Generic[T]):
     def from_dict(cls: Type[Self], json_dict: JsonDict) -> Self:
         """Transforms itself into a dictionary form."""
         raise NotImplementedError("Method should be implemented or provided via `dataclass_json` decorator.")
-
-
 

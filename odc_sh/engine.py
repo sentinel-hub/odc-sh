@@ -1,8 +1,6 @@
 import math
 import os
 import uuid
-import warnings
-
 import datacube
 import pandas
 import numpy as np
@@ -11,13 +9,15 @@ from datacube.api.query import Query
 from datacube.index.hl import prep_eo3
 from sentinelhub import (CRS, BBox, BBoxSplitter, SentinelHubCatalog,
                          SentinelHubDownloadClient, SHConfig, SentinelHubBYOC,
-                         bbox_to_dimensions, DataCollection)
+                         bbox_to_dimensions, DataCollection, Geometry)
 
 from sentinelhub.data_collections import DataCollectionDefinition, ServiceUrl
 from sentinelhub.data_collections_bands import Band, Unit
 
 from .utils import (build_sentinel_hub_request, features_to_dates,
                     get_catalog_results, get_evalscript, getCollection)
+
+from pprint import pprint
 
 class Singleton(type):
     """A Singleton metaclass."""
@@ -56,7 +56,8 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
             return super().load_data(sources, *args, **kwargs)
         else:
             return self.process_sh_sources(sources, *args, **kwargs)    
-    
+
+
     def process_sh_sources(self, sources, *args, **kwargs):
         print("LOADING SENTINEL HUB DATA")
         x1 = x2 = y1 = y2 = None
@@ -69,12 +70,12 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         
         for datasets in sources.values:
             for dataset in datasets:
-                extent = dataset.metadata_doc["extent"]
-
-                x1 = extent["lon"]["begin"]
-                x2 = extent["lon"]["end"]
-                y1 = extent["lat"]["begin"]
-                y2 = extent["lat"]["end"]
+                crs = dataset.metadata_doc["crs"]
+                bbox = Geometry(dataset.metadata_doc["geometry"], crs = crs).bbox
+                x1=bbox.min_x
+                x2=bbox.max_x
+                y1=bbox.min_y
+                y2=bbox.max_y
 
                 print("---------------------------------------------")
                 sh_resolution = dataset.metadata_doc["properties"]["sh_resolution"]
@@ -86,22 +87,20 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                 band_sample_types = [m.dtype for m in bands]
 
                 collection = dataset.metadata_doc["properties"]["sh_collection"]
-                
+
                 print(
-                    f"longitude: {x1}, {x2} \
-                    - latitude: {y1}, {y2} \
-                    - resolution: {sh_resolution} m \
-                    - time: {time.date()} "
+                    f"longitude: {x1}, {x2}; latitude: {y1}, {y2}; resolution: {sh_resolution} m; crs: {crs}; time: {time.date()} "
                 )
 
                 time_slice = self.load_sentinel_hub_data(
                     collection,
                     time,
-                    BBox(bbox=[x1, y1, x2, y2], crs=CRS.WGS84),
+                    bbox,
                     sh_resolution,
                     band_names,
                     band_units,
                     band_sample_types,
+                    crs
                 )
                 data.append(time_slice)
                 dates.append(np.datetime64(time))
@@ -149,9 +148,8 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         for datasets in sources.values:
             for dataset in datasets:
                 if "properties" in dataset.metadata_doc and "sh_collection" in dataset.metadata_doc["properties"]:
-                        return True
+                    return True
         return False
-        
 
     def load_sentinel_hub_data(
         self,
@@ -162,7 +160,9 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         band_names,
         band_units,
         band_sample_types,
+        crs=CRS.WGS84
     ):
+
         # calculate
         size = bbox_to_dimensions(bbox_full, resolution=resolution)
 
@@ -173,7 +173,7 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         image_width = math.ceil(size[0] / w)
         image_height = math.ceil(size[1] / h)
 
-        splitter = BBoxSplitter([bbox_full.geometry], CRS.WGS84, (w, h))
+        splitter = BBoxSplitter([bbox_full.geometry], crs, (w, h))
         info_list = splitter.get_info_list()
 
         # create a list of requests
@@ -183,6 +183,7 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
             [evalscript, responses] = get_evalscript(
                 band_names, band_units, band_sample_types
             )
+
             list_of_requests.append(
                 build_sentinel_hub_request(
                     self.config,
@@ -245,7 +246,7 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
     ):
         """
          Find datasets matching query.
-        :param product: api_id of the product to be downloaded. Check DataCollection from sentinel hub py for details.
+        :param product: Collection definition to be downloaded. Check DataCollection from sentinel hub py for details.
         :param latitude: (min, max) latitude
         :param longitude: (min, max)  longitude
         :param time: (min, max)  temporal interval of the desired data
@@ -269,24 +270,24 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
             # verify SH Client credentials before loadind data
             self.validate_credentials()
             
-            #only api id is needed
             collection = product
-            
-            latitude = search_terms['latitude']
-            longitude = search_terms['longitude']
-            time = search_terms['time']
-            sh_resolution = search_terms['sh_resolution'] 
-            
-            try:
-                user_measurements = search_terms['measurements']
-            except:
-                user_measurements = None            
-            
+
+            # load initial parameters
+            latitude = search_terms['latitude'] if 'latitude' in search_terms.keys() else None
+            longitude = search_terms['longitude'] if 'longitude' in search_terms.keys() else None
+            time = search_terms['time'] if 'time' in search_terms.keys() else None
+            crs = CRS.ogc_string(search_terms['crs']) if 'crs' in search_terms.keys() else CRS.WGS84
+            user_measurements = search_terms['measurements'] if 'measurements' in search_terms.keys() else None
+            sh_resolution = search_terms['sh_resolution'] if 'sh_resolution' in search_terms.keys() else None
+
             if not sh_resolution:
                 raise ValueError("sh_resolution (m) is not defined")
                 
             if not latitude or not longitude:
-                raise Exception("Latitude or longitude is missing.")
+                raise ValueError("Latitude or longitude is missing.")
+
+            if not time:
+                raise ValueError("Time is missing.")
 
             if longitude[0] > longitude[1]:
                 longitude = (longitude[1], longitude[0])
@@ -296,13 +297,15 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
 
             bbox = BBox(
                 bbox=[longitude[0], latitude[0], longitude[1], latitude[1]],
-                crs=CRS.WGS84,
+                crs=crs,
             )
             
             print("Searching for new products")
             query.product = self.generate_product(
                 collection, user_measurements, sh_resolution
             )
+
+            print(bbox)
 
             # Generate Datacube dataset documents from SH image data
             search_iter = get_catalog_results(
@@ -315,16 +318,17 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                 raise ValueError(f"No data available for selected period: {time}")
 
             for date in dates:
-                    dataset_metadata = self.make_img_doc(
+                dataset_metadata = self.make_img_doc(
                         collection,
                         query.product.measurements,
                         date,
                         sh_resolution,
                         bbox,
-                    )
-                    ds_meta = prep_eo3(dataset_metadata)
-                    dataset = datacube.model.Dataset(query.product, ds_meta, uris="")
-                    yield dataset
+                        crs,
+                )
+                ds_meta = prep_eo3(dataset_metadata)
+                dataset = datacube.model.Dataset(query.product, ds_meta, uris="")
+                yield dataset
         else:
             for dataset in super().find_datasets(
                 limit=limit, **search_terms
@@ -334,20 +338,20 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
     def validate_credentials(self):
         if not self.config.sh_client_id or not self.config.sh_client_secret:
             raise ValueError("To use Sentinel Hub, please provide the credentials sh_client_id and sh_client_secret. " 
-                             "Usage: en = engine.Datacube(sh_client_id=<YOUR_SH_CLIENT_ID>, sh_client_secret=<YOUR_SH_ CLIENT_SECRET>)). "
+                             "Usage: en = engine.Datacube(sh_client_id=<YOUR_SH_CLIENT_ID>, "
+                             "sh_client_secret=<YOUR_SH_ CLIENT_SECRET>)). "
                              "You can also set the credentials in your environment settings." 
                              "Check https://sentinelhub-py.readthedocs.io/en/latest/configure.html for more info.")
-                
-                
+
     def make_img_doc(
-        self, collection, measurements, date, sh_resolution, bbox
+        self, collection, measurements, date, sh_resolution, bbox, crs
     ):
         transform = bbox.get_transform_vector(sh_resolution, sh_resolution)
         doc = {
             "id": str(uuid.uuid4()),
             "$schema": "https://schemas.opendatacube.org/dataset",
             "product": {"name": collection.name},
-            "crs": CRS.WGS84.ogc_string(),
+            "crs": crs,
             "properties": {
                 "odc:processing_datetime": date,
                 "odc:file_format": "tif",
@@ -372,7 +376,9 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         self, collection, user_measurements, sh_resolution
     ):
         """Generates an ODC product from SH datasource metadata.
-        :param product_id: The product ID of the SH collection.
+        :param collection: The Sentinehub DataCollection definition of SH collection. Can be a BYOC or one
+        of the default collections. Check
+        https://github.com/sentinel-hub/sentinelhub-py/blob/master/sentinelhub/data_collections.py for details.
         :param user_measurements: Optional; List of predefined measurements selected by the user (can be None).
         :param sh_resolution: the desired output resolution of the product.
         :rtype: A datacube.model.DatasetType product.

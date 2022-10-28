@@ -1,3 +1,4 @@
+from sentinelhub.download.models import DownloadRequest
 from sentinelhub.api.base import SentinelHubService
 from typing import Any, Union
 from sentinelhub.type_utils import (JsonDict, Json)

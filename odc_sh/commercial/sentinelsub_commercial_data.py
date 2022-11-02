@@ -92,11 +92,12 @@ class SentinelHubCommercialData(BaseCommercialClient):
                                                   request_type=RequestType.GET, use_session=True)
         return self.client.download(download_requests=download_request, decode_data=False)
 
-    def order(self, name: str, collection_id: str, query: dict, **kwargs):
+    def order(self, name: str, query: dict, **kwargs):
         provider = query["provider"]
         if provider == Providers.PLANET.value:
             query['data'][0]["harmonizeTo"] = "NONE"
 
+        # Add selected item_ids
         item_ids = kwargs.get("item_ids")
         if item_ids:
             del query["data"][0]["dataFilter"]
@@ -111,7 +112,13 @@ class SentinelHubCommercialData(BaseCommercialClient):
             elif provider == Providers.WORLDVIEW.value:
                 query["data"][0]["selectedImages"] = item_ids
 
-        payload = dict(name=name, collectionId=collection_id, input=query)
+        payload = dict(name=name, input=query)
+
+        # Set collection id
+        col_id = kwargs.get("collectionId")
+        if col_id:
+            payload["collectionId"] = col_id
+
         return self._call_job("orders", payload)
 
     def get_orders(self, *args):
@@ -136,6 +143,7 @@ class SentinelHubCommercialData(BaseCommercialClient):
             return "Order not found!"
 
     def get_collection(self, payload) -> JsonDict:
+        payload = dict(input=payload)
         response_info = self._call_job("orders/searchcompatiblecollections", payload)
         return response_info
 

@@ -37,54 +37,41 @@ class SentinelHubLoader():
         
         super().__init__(*args, **kwargs)
 
-    def process_sh_sources(self, sources, *args, **kwargs):
+    def process_sh_sources(self, collection, bbox, measurements, sh_resolution, dates, crs):
         print("LOADING SENTINEL HUB DATA")
-        x1 = x2 = y1 = y2 = None
+
+        x1 = bbox.min_x
+        x2 = bbox.max_x
+        y1 = bbox.min_y
+        y2 = bbox.max_y
 
         product_id = None
         band_names = None
 
         data = []
-        dates = []
-        
-        for datasets in sources.values:
-            for dataset in datasets:
-                extent = dataset.metadata_doc["extent"]
+        res_dates = []
+        for time in dates:
+            print("---------------------------------------------")
+            band_names = [m['name'] for m in measurements]
+            band_units = [m['units'] for m in measurements]
+            band_sample_types = [m['dtype'] for m in measurements]
 
-                x1 = extent["lon"]["begin"]
-                x2 = extent["lon"]["end"]
-                y1 = extent["lat"]["begin"]
-                y2 = extent["lat"]["end"]
+            print(
+                f"longitude: {x1}, {x2}; latitude: {y1}, {y2}; resolution: {sh_resolution} m; crs: {crs}; time: {time.date()} "
+            )
 
-                print("---------------------------------------------")
-                sh_resolution = dataset.metadata_doc["properties"]["sh_resolution"]
-                time = dataset.metadata_doc["properties"]["datetime"]
-                bands = list(dataset.metadata_doc["measurements"].values())
-
-                band_names = [m.name for m in bands]
-                band_units = [m.units for m in bands]
-                band_sample_types = [m.dtype for m in bands]
-
-                collection = dataset.metadata_doc["properties"]["sh_collection"]
-                
-                print(
-                    f"longitude: {x1}, {x2} \
-                    - latitude: {y1}, {y2} \
-                    - resolution: {sh_resolution} m \
-                    - time: {time.date()} "
-                )
-
-                time_slice = self.load_sentinel_hub_data(
-                    collection,
-                    time,
-                    BBox(bbox=[x1, y1, x2, y2], crs=CRS.WGS84),
-                    sh_resolution,
-                    band_names,
-                    band_units,
-                    band_sample_types,
-                )
-                data.append(time_slice)
-                dates.append(np.datetime64(time))
+            time_slice = self.load_sentinel_hub_data(
+                collection,
+                time,
+                bbox,
+                sh_resolution,
+                band_names,
+                band_units,
+                band_sample_types,
+                crs
+            )
+            data.append(time_slice)
+            res_dates.append(np.datetime64(time))
 
         # should not happen
         if not x1 or not x2 or not y1 or not y2:
@@ -105,7 +92,7 @@ class SentinelHubLoader():
             y1 + y_res / 2, y2 - y_res / 2, time_slice.shape[0], dtype=np.float32
         )
 
-        date = np.array(dates)
+        date = np.array(res_dates)
         img = np.array(data)
 
         # data are stored as time / latitude (height) / longitude (width)
@@ -134,7 +121,9 @@ class SentinelHubLoader():
         band_names,
         band_units,
         band_sample_types,
+        crs=CRS.WGS84
     ):
+
         # calculate
         size = bbox_to_dimensions(bbox_full, resolution=resolution)
 
@@ -145,7 +134,7 @@ class SentinelHubLoader():
         image_width = math.ceil(size[0] / w)
         image_height = math.ceil(size[1] / h)
 
-        splitter = BBoxSplitter([bbox_full.geometry], CRS.WGS84, (w, h))
+        splitter = BBoxSplitter([bbox_full.geometry()], crs, (w, h))
         info_list = splitter.get_info_list()
 
         # create a list of requests
@@ -155,6 +144,7 @@ class SentinelHubLoader():
             [evalscript, responses] = get_evalscript(
                 band_names, band_units, band_sample_types
             )
+
             list_of_requests.append(
                 build_sentinel_hub_request(
                     self.config,
@@ -188,9 +178,9 @@ class SentinelHubLoader():
             index_y = int(info["index_y"])
 
             single_time_data[
-                index_y * image_height : (index_y + 1) * image_height,
-                index_x * image_width : (index_x + 1) * image_width,
-                ...,
+            index_y * image_height: (index_y + 1) * image_height,
+            index_x * image_width: (index_x + 1) * image_width,
+            ...,
             ] = np.flipud(data)
 
         if single_time_data.shape[-1] == 1:
@@ -198,7 +188,7 @@ class SentinelHubLoader():
 
         return single_time_data
 
-    def load(self, *args, **kwargs):
+    def load(self, product, latitude, longitude, time, **kwargs):
         """
         Simulates the load function from Datacube without actually needing the ODC environment.
 
@@ -207,8 +197,6 @@ class SentinelHubLoader():
 
         :rtype: The queried xarray.Dataset.
         """
-
-        product = search_terms['product']
 
         if not product:
             raise ValueError("product needs to be defined")
@@ -220,61 +208,50 @@ class SentinelHubLoader():
             # only api id is needed
             collection = product
 
-            latitude = search_terms['latitude']
-            longitude = search_terms['longitude']
-            time = search_terms['time']
-            sh_resolution = search_terms['sh_resolution']
+            self.config.sh_base_url = collection.service_url
 
-            try:
-                user_measurements = search_terms['measurements']
-            except:
-                user_measurements = None
+            # load initial parameters
+            crs = CRS.ogc_string(kwargs['crs']) if 'crs' in kwargs.keys() else CRS.WGS84
+            user_measurements = kwargs['measurements'] if 'measurements' in kwargs.keys() else None
+            sh_resolution = kwargs['sh_resolution'] if 'sh_resolution' in kwargs.keys() else None
 
             if not sh_resolution:
                 raise ValueError("sh_resolution (m) is not defined")
 
             if not latitude or not longitude:
-                raise Exception("Latitude or longitude is missing.")
+                raise ValueError("Latitude or longitude is missing.")
+
+            if not time:
+                raise ValueError("Time is missing.")
 
             if longitude[0] > longitude[1]:
                 longitude = (longitude[1], longitude[0])
 
             if longitude[0] > longitude[1]:
                 longitude = (longitude[1], longitude[0])
+
+            print(longitude, latitude)
 
             bbox = BBox(
                 bbox=[longitude[0], latitude[0], longitude[1], latitude[1]],
-                crs=CRS.WGS84,
+                crs=crs,
             )
 
-            print("Searching for new products")
-            query.product = self.generate_product(
-                collection, user_measurements, sh_resolution
-            )
+            measurements = list(self.get_measurements(collection, user_measurements))
 
-            # Generate Datacube dataset documents from SH image data
+            print(collection)
+
             search_iter = get_catalog_results(
                 SentinelHubCatalog(config=self.config), collection, bbox, time
             )
+
             image_metadata_list = list(search_iter)
             dates = features_to_dates(image_metadata_list)
 
             if not dates:
                 raise ValueError(f"No data available for selected period: {time}")
 
-            for date in dates:
-                dataset_metadata = self.make_img_doc(
-                    collection,
-                    query.product.measurements,
-                    date,
-                    sh_resolution,
-                    bbox,
-                )
-                ds_meta = prep_eo3(dataset_metadata)
-                dataset = datacube.model.Dataset(query.product, ds_meta, uris="")
-
-            measurements = list(self.get_measurements(collection, user_measurements))
-            return self.process_sh_sources(*args, **kwargs)
+            return self.process_sh_sources(collection, bbox, measurements, sh_resolution, dates, crs)
         else:
             raise ValueError("This loader only supports Sentinel HUB products. Use dc = engine.Datacube() for ODC products.")
 
@@ -283,79 +260,10 @@ class SentinelHubLoader():
     def validate_credentials(self):
         if not self.config.sh_client_id or not self.config.sh_client_secret:
             raise ValueError("To use Sentinel Hub, please provide the credentials sh_client_id and sh_client_secret. " 
-                             "Usage: en = engine.Datacube(sh_client_id=<YOUR_SH_CLIENT_ID>, sh_client_secret=<YOUR_SH_ CLIENT_SECRET>)). "
+                             "Usage: en = engine.Datacube(sh_client_id=<YOUR_SH_CLIENT_ID>, "
+                             "sh_client_secret=<YOUR_SH_ CLIENT_SECRET>)). "
                              "You can also set the credentials in your environment settings." 
                              "Check https://sentinelhub-py.readthedocs.io/en/latest/configure.html for more info.")
-                
-                
-    def make_img_doc(
-        self, collection, measurements, date, sh_resolution, bbox
-    ):
-        transform = bbox.get_transform_vector(sh_resolution, sh_resolution)
-        doc = {
-            "id": str(uuid.uuid4()),
-            "$schema": "https://schemas.opendatacube.org/dataset",
-            "product": {"name": collection.name},
-            "crs": CRS.WGS84.ogc_string(),
-            "properties": {
-                "odc:processing_datetime": date,
-                "odc:file_format": "tif",
-                "datetime": date,
-                "sh_resolution": sh_resolution,
-                "sh_collection": collection,
-            },
-            "geometry": bbox.geojson,
-            "measurements": measurements,
-            "grids": {
-                "default": dict(
-                    shape=[1, 1],
-                    transform=[x for d in [transform, (0, 0, 1)] for x in d],
-                )
-            },  # greed needs to be set but is not used
-            "lineage": {"source_datasets": {}},
-        }
-
-        return doc
-
-    def generate_product(
-        self, collection, user_measurements, sh_resolution
-    ):
-        """Generates an ODC product from SH datasource metadata.
-        :param product_id: The product ID of the SH collection.
-        :param user_measurements: Optional; List of predefined measurements selected by the user (can be None).
-        :param sh_resolution: the desired output resolution of the product.
-        :rtype: A datacube.model.DatasetType product.
-        """
-        
-        if not collection:
-            raise ValueError(
-                f"Sentinel collection was not defined"
-            )
-
-        self.config.sh_base_url = collection.service_url
-
-
-        collection_details = SentinelHubCatalog(config=self.config).get_collection(
-            collection
-        )
-
-        definition = dict(
-            name=collection.api_id.replace("-", "_"),
-            description=collection_details["description"],
-            metadata_type="eo3",
-            metadata=dict(
-                product=dict(name=collection_details["title"]),
-                properties={"eo:platform": "Sentinel HUB"},
-                id=collection.api_id,
-            ),
-            measurements=bands,
-            storage=dict(
-                crs=CRS.WGS84.ogc_string(),
-                resolution=dict(latitude=sh_resolution, longitude=sh_resolution),
-            ),
-        )
-
-        return prod_res
 
     def get_measurements(self, collection, measurements=None):
         bands = collection.bands
@@ -378,9 +286,7 @@ class SentinelHubLoader():
                     dtype=np.dtype(band.output_types[0]).name,
                     nodata=0,
                 )
-                print(f"measurement: {measurement}")
-                yield datacube.model.Measurement(**measurement)
-
+                yield measurement
     
     def list_sh_products(self):
         cols = ['name',

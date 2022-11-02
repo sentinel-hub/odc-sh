@@ -1,5 +1,5 @@
 import os
-from odc_sh import engine
+from odc_sh import sentinelhub_engine
 from sentinelhub import (CRS, DataCollection)
 
 sh_client_id=""
@@ -11,9 +11,7 @@ if not sh_client_id:
 if not sh_client_secret:
     sh_client_secret = os.environ['SH_CLIENT_SECRET'] 
 
-dc = engine.Datacube(sh_client_id=sh_client_id, sh_client_secret=sh_client_secret)
-
-p = dc.list_products()
+dc = sentinelhub_engine.SentinelHubLoader(sh_client_id=sh_client_id, sh_client_secret=sh_client_secret)
 
 resolution = 300  # in meters
 crs = 'EPSG:4326'

@@ -49,7 +49,7 @@ class ScopeType(Enum):
 
 class ThumbnailType(Enum):
     SPOT = "AIRBUS_SPOT"
-    PLEIADES = "AIRBUS_PLEIADES"
+    PHR = "AIRBUS_PLEIADES"
     SCOPE = "PLANET_SCOPE"
     SKYSAT = "PLANET_SKYSAT"
     WORLDVIEW = "MAXAR_WORLDVIEW"
@@ -143,4 +143,6 @@ class CommercialSearchResponse(Generic[T]):
     def from_dict(cls: Type[Self], json_dict: JsonDict) -> Self:
         """Transforms itself into a dictionary form."""
         raise NotImplementedError("Method should be implemented or provided via `dataclass_json` decorator.")
+
+
 

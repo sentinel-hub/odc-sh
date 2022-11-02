@@ -27,6 +27,9 @@ class BaseCommercialClient(SentinelHubService):
         response_info: CommercialSearchResponse = CommercialSearchResponse.from_dict(self._call_job("nativesearch", payload))
         return response_info
 
+    def get_thumb_type(self, typ):
+        return ThumbnailType[typ].value
+
 
 class SentinelHubCommercialData(BaseCommercialClient):
 
@@ -53,7 +56,7 @@ class SentinelHubCommercialData(BaseCommercialClient):
         for name, val in kwargs.items():
             payload["data"][0]["dataFilter"][name] = val
 
-        return self.search(payload), payload
+        return self.search(payload), dict([("query", payload), ("thumb", self.get_thumb_type(typ.value))])
 
     def search_worldview(self, kernel: WorldViewKernel, bounds: dict, time_from: str, time_to: str, **kwargs: Any):
         kwargs = dict(kwargs, timeRange={"from": time_from, "to": time_to})
@@ -63,7 +66,7 @@ class SentinelHubCommercialData(BaseCommercialClient):
         for name, val in kwargs.items():
             payload["data"][0]["dataFilter"][name] = val
 
-        return self.search(payload), payload
+        return self.search(payload), dict([("query", payload), ("thumb", self.get_thumb_type("WORLDVIEW"))])
 
     def search_planet(self, typ: Union[SkySatType, ScopeType], bundle: Union[ScopeBundle, SkySatBundle], bounds: dict, time_from: str,
                       time_to: str, **kwargs: Any):
@@ -80,10 +83,12 @@ class SentinelHubCommercialData(BaseCommercialClient):
         for name, val in kwargs.items():
             payload["data"][0]["dataFilter"][name] = val
 
-        return self.search(payload), payload
+        enm = "SKYSAT" if type(typ) == SkySatType else "SCOPE"
+
+        return self.search(payload), dict([("query", payload), ("thumb", self.get_thumb_type(enm))])
 
     def thumbnail(self, provider_type: ThumbnailType, item_id):
-        download_request = DownloadRequest(url=self.service_url + f"/collections/{provider_type.value}/products/{item_id}/thumbnail",
+        download_request = DownloadRequest(url=self.service_url + f"/collections/{provider_type}/products/{item_id}/thumbnail",
                                                   request_type=RequestType.GET, use_session=True)
         return self.client.download(download_requests=download_request, decode_data=False)
 

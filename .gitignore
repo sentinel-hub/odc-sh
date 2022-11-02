@@ -1,0 +1,5 @@
+*.pyc
+build/
+.idea/
+odc_sh.egg-info/dependency_links.txt
+odc_sh.egg-info/

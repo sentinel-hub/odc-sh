@@ -4,3 +4,4 @@ rasterio
 xarray
 datacube @ git+https://github.com/opendatacube/datacube-core.git
 sentinelhub>=3.5.0
+tabulate

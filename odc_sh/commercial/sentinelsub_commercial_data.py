@@ -1,3 +1,4 @@
+from tabulate import tabulate
 from sentinelhub.download.models import DownloadRequest
 from sentinelhub.api.base import SentinelHubService
 from typing import Any, Union
@@ -6,6 +7,39 @@ from sentinelhub.constants import RequestType
 
 from .commercial_data_base import CommercialSearchResponse, ThumbnailType, \
     AirbusConstellation, Providers, ScopeType, ScopeBundle, SkySatBundle, SkySatType, WorldViewKernel
+
+
+class SearchResponse:
+
+    def __init__(self, data, query, **kwargs):
+        self.data = data
+        self.query = query
+        self.search_props = []
+
+        for k in kwargs:
+            setattr(self, k, kwargs[k])
+
+    def print(self, props):
+        self.search_props = props
+        print_data = []
+        if self.typ == SkySatType or self.typ == ScopeType:
+            print_data = [self.print_fun(feature["properties"], [idx, feature["id"]]) for idx, feature in enumerate(self.data.features)]
+            props[0:0] = ["idx", "id"]
+        elif self.typ == AirbusConstellation or self.typ == WorldViewKernel:
+            print_data = [self.print_fun(feature["properties"], [idx]) for idx, feature in enumerate(self.data.features)]
+            props[0:0] = ["idx"]
+        else:
+            print_data = [self.print_fun(feature, [idx]) for idx, feature in enumerate(self.data)]
+            props[0:0] = ["idx"]
+
+        if print_data:
+            print(tabulate(print_data, headers=props))
+        else:
+            print("No data found.")
+
+    def print_fun(self, ft, idx):
+        return idx + [*list(map(lambda h: ft.get(h), self.search_props))]
+
 
 class BaseCommercialClient(SentinelHubService):
 
@@ -56,7 +90,7 @@ class SentinelHubCommercialData(BaseCommercialClient):
         for name, val in kwargs.items():
             payload["data"][0]["dataFilter"][name] = val
 
-        return self.search(payload), dict([("query", payload), ("thumb", self.get_thumb_type(typ.value))])
+        return SearchResponse(self.search(payload), payload, thumb=self.get_thumb_type(typ.value), typ=type(typ))
 
     def search_worldview(self, kernel: WorldViewKernel, bounds: dict, time_from: str, time_to: str, **kwargs: Any):
         kwargs = dict(kwargs, timeRange={"from": time_from, "to": time_to})
@@ -65,8 +99,7 @@ class SentinelHubCommercialData(BaseCommercialClient):
         payload["data"][0]["dataFilter"] = dict()
         for name, val in kwargs.items():
             payload["data"][0]["dataFilter"][name] = val
-
-        return self.search(payload), dict([("query", payload), ("thumb", self.get_thumb_type("WORLDVIEW"))])
+        return SearchResponse(self.search(payload), payload, thumb=self.get_thumb_type("WORLDVIEW"), typ=type(kernel))
 
     def search_planet(self, typ: Union[SkySatType, ScopeType], bundle: Union[ScopeBundle, SkySatBundle], bounds: dict, time_from: str,
                       time_to: str, **kwargs: Any):
@@ -85,7 +118,7 @@ class SentinelHubCommercialData(BaseCommercialClient):
 
         enm = "SKYSAT" if type(typ) == SkySatType else "SCOPE"
 
-        return self.search(payload), dict([("query", payload), ("thumb", self.get_thumb_type(enm))])
+        return SearchResponse(self.search(payload), payload, thumb=self.get_thumb_type(enm), typ=type(typ))
 
     def thumbnail(self, provider_type: ThumbnailType, item_id):
         download_request = DownloadRequest(url=self.service_url + f"/collections/{provider_type}/products/{item_id}/thumbnail",
@@ -118,20 +151,23 @@ class SentinelHubCommercialData(BaseCommercialClient):
         col_id = kwargs.get("collectionId")
         if col_id:
             payload["collectionId"] = col_id
-
-        return self._call_job("orders", payload)
+        try:
+            return self._call_job("orders", payload)
+        except:
+            return "Error creating order. Check if collection name already exists."
 
     def get_orders(self, *args):
         response_info = self.client.get_json_dict(url=self.service_url + "/orders" + self.check_arg(args),
                                                   request_type=RequestType.GET, use_session=True)
-        return response_info
+        response_info = dict(data=[response_info]) if not response_info.get("data") else response_info
+        return SearchResponse(response_info.get("data"), {}, typ="Order")
 
     def delete_order(self, id_order):
         try:
             self.client.get_json(url=self.service_url + "/orders/" + id_order,
                                              request_type=RequestType.DELETE, use_session=True)
             return f"Order deleted. {id_order}"
-        except:
+        except ValueError:
             return "Order not found!"
 
     def confirm_order(self, id_order):
@@ -145,7 +181,7 @@ class SentinelHubCommercialData(BaseCommercialClient):
     def get_collection(self, payload) -> JsonDict:
         payload = dict(input=payload)
         response_info = self._call_job("orders/searchcompatiblecollections", payload)
-        return response_info
+        return SearchResponse(response_info.get("data"), {}, typ="Collection")
 
     def check_arg(self, args):
         id = ""

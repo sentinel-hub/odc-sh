@@ -203,9 +203,11 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
             list_of_requests, show_progress=True, max_threads=20
         )
 
+        dims = (image_height * h, image_width * w, len(band_names)) if len(band_names) > 1 else (image_height * h, image_width * w)
+        
         # prepare data storage
         single_time_data = np.zeros(
-            (image_height * h, image_width * w, len(band_names)), dtype=np.float32
+            dims, dtype=np.float32
         )
 
         # load and copy data - as the multi-band response is different, we need to parse the response differently
@@ -276,7 +278,7 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
             latitude = search_terms['latitude'] if 'latitude' in search_terms.keys() else None
             longitude = search_terms['longitude'] if 'longitude' in search_terms.keys() else None
             time = search_terms['time'] if 'time' in search_terms.keys() else None
-            crs = CRS.ogc_string(search_terms['crs']) if 'crs' in search_terms.keys() else CRS.WGS84
+            crs = CRS.ogc_string(search_terms['crs']) if 'crs' in search_terms.keys() else str(CRS.WGS84)
             user_measurements = search_terms['measurements'] if 'measurements' in search_terms.keys() else None
             sh_resolution = search_terms['sh_resolution'] if 'sh_resolution' in search_terms.keys() else None
 
@@ -347,6 +349,8 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         self, collection, measurements, date, sh_resolution, bbox, crs
     ):
         transform = bbox.get_transform_vector(sh_resolution, sh_resolution)
+        print("CRS")
+        print(crs)
         doc = {
             "id": str(uuid.uuid4()),
             "$schema": "https://schemas.opendatacube.org/dataset",
@@ -497,5 +501,3 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         )
         
         return DataCollection.define_byoc(my_collection["id"], name=my_collection["id"], bands=bands, service_url=ServiceUrl.MAIN)
-        
-  

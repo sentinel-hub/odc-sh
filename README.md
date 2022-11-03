@@ -9,13 +9,19 @@ Set the sentinel hub credential available here https://apps.sentinel-hub.com/das
 Try to run the test examples. To proiduce the datacube call 
 
 ```
-resolution = 100
-longitude  = (12.181599, 18.878371)
-latitude = (41.687271, 45.064587)
-  
-time = ('2019-01-01', '2019-01-10')
+resolution = 20  # in meters
+longitude = (11.987527, 12.004914)
+latitude = (41.990797, 42.018348)
 
-ds = dc.load(product=DataCollection.SENTINEL2_L1C.api_id, measurements=['B01', 'B02'], latitude=latitude, longitude=longitude, time=time, sh_resolution=resolution)
+time = ("2019-01-01", "2019-01-04")
+
+ds = dc.load(
+    product=DataCollection.SENTINEL2_L1C,
+    latitude=latitude,
+    longitude=longitude,
+    time=time,
+    sh_resolution=resolution,
+)
 
 ```
 

@@ -1,7 +1,6 @@
 import os
 from odc_sh import engine
-from sentinelhub import DataCollection
-
+from sentinelhub import (CRS, DataCollection)
 
 sh_client_id=""
 sh_client_secret=""
@@ -14,26 +13,28 @@ if not sh_client_secret:
 
 dc = engine.Datacube(sh_client_id=sh_client_id, sh_client_secret=sh_client_secret)
 
-p = dc.list_sh_products()
+p = dc.list_products()
 
+resolution = 300  # in meters
+crs = 'EPSG:4326'
+longitude = (12.987527, 13.104914)
+latitude = (41.990797, 42.218348)
 
-resolution = 100  # in meters
-longitude = (12.181599, 14.878371)
-latitude = (44.687271, 45.064587)
+#crs = 'EPSG:3857'
+#longitude = (1385585.909539,1396057.845357)
+#latitude = (5141536.685675, 5148568.905287)
 
 time = ("2019-01-01", "2019-01-04")
 
-dc.list_products
-
 ds = dc.load(
-    product=DataCollection.SENTINEL2_L1C,
-    measurements=["B01"],
+    product=DataCollection.SENTINEL3_OLCI,
     latitude=latitude,
     longitude=longitude,
     time=time,
     sh_resolution=resolution,
+    crs=crs
 )
 
-# print(ds.head)
+print(ds.head)
 
-ds.to_netcdf("s2_single_band.nc")
+#ds.to_netcdf("s3_all_bands.nc")

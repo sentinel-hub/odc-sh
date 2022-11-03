@@ -11,29 +11,48 @@ from .commercial_data_base import CommercialSearchResponse, ThumbnailType, \
 
 class SearchResponse:
 
-    def __init__(self, data, query, **kwargs):
+    def __init__(self, data, **kwargs):
         self.data = data
-        self.query = query
         self.search_props = []
 
         for k in kwargs:
             setattr(self, k, kwargs[k])
 
-    def print(self, props):
-        self.search_props = props
+    def get_ids(self):
+        item_ids = []
+        if self.typ == SkySatType or self.typ == ScopeType:
+            item_ids = [feature["id"] for feature in self.data.features]
+        elif self.typ == AirbusConstellation:
+            item_ids = [feature["properties"]["id"] for feature in self.data.features]
+        elif self.typ == WorldViewKernel:
+            item_ids = [feature["catalogId"] for feature in self.data.features]
+        else:
+            item_ids = [o["id"] for o in self.data]
+        return item_ids
+
+    def print_info(self, **kwargs):
+        if hasattr(self,"err"):
+            print(self.err)
+            return
+
+        if kwargs.get("props"):
+            self.search_props = kwargs.get("props")
+
         print_data = []
         if self.typ == SkySatType or self.typ == ScopeType:
             print_data = [self.print_fun(feature["properties"], [idx, feature["id"]]) for idx, feature in enumerate(self.data.features)]
-            props[0:0] = ["idx", "id"]
+            self.search_props[0:0] = ["idx", "id"]
         elif self.typ == AirbusConstellation or self.typ == WorldViewKernel:
             print_data = [self.print_fun(feature["properties"], [idx]) for idx, feature in enumerate(self.data.features)]
-            props[0:0] = ["idx"]
-        else:
+            self.search_props[0:0] = ["idx"]
+        elif self.typ == "Normal":
             print_data = [self.print_fun(feature, [idx]) for idx, feature in enumerate(self.data)]
-            props[0:0] = ["idx"]
+            self.search_props[0:0] = ["idx"]
+        else:
+            print_data = [self.print_fun(self.data, [])]
 
         if print_data:
-            print(tabulate(print_data, headers=props))
+            print(tabulate(print_data, headers=self.search_props))
         else:
             print("No data found.")
 
@@ -67,20 +86,16 @@ class BaseCommercialClient(SentinelHubService):
 
 class SentinelHubCommercialData(BaseCommercialClient):
 
-    def quotas(self, *args, **kwargs):
-        res = self.client.get_json_dict(url=self.service_url+"/quotas" + self.check_arg(args), use_session=True)
-        if kwargs.get("raw"):
-            return res
-        else:
-            s = ""
-            for quota in res["data"]:
-                s += f"{quota['collectionId']}\nQuota: {quota['quotaSqkm']}\nUsed: {quota['quotaUsed']}\n----------\n"
-            return s
-
     @staticmethod
     def _get_service_url(base_url: str) -> str:
         """Provides URL to Catalog API"""
         return f"{base_url}/api/v1/dataimport"
+
+    def quotas(self, *args):
+        res = self.client.get_json_dict(url=self.service_url+"/quotas" + self.check_arg(args), use_session=True)
+
+        search_props = ["collectionId", "quotaSqkm", "quotaUsed" ]
+        return SearchResponse(res["data"], typ="Normal", search_props=search_props)
 
     def search_airbus(self, typ: AirbusConstellation, bounds: dict, time_from: str, time_to: str, **kwargs: Any):
         kwargs = dict(kwargs, timeRange={"from": time_from, "to": time_to})
@@ -90,7 +105,9 @@ class SentinelHubCommercialData(BaseCommercialClient):
         for name, val in kwargs.items():
             payload["data"][0]["dataFilter"][name] = val
 
-        return SearchResponse(self.search(payload), payload, thumb=self.get_thumb_type(typ.value), typ=type(typ))
+        search_props = ["id", "acquisitionDate", "resolution", "cloudCover", "incidenceAngle"]
+        return SearchResponse(self.search(payload), query=payload, thumb=self.get_thumb_type(typ.value), typ=type(typ),
+                              search_props=search_props)
 
     def search_worldview(self, kernel: WorldViewKernel, bounds: dict, time_from: str, time_to: str, **kwargs: Any):
         kwargs = dict(kwargs, timeRange={"from": time_from, "to": time_to})
@@ -99,7 +116,10 @@ class SentinelHubCommercialData(BaseCommercialClient):
         payload["data"][0]["dataFilter"] = dict()
         for name, val in kwargs.items():
             payload["data"][0]["dataFilter"][name] = val
-        return SearchResponse(self.search(payload), payload, thumb=self.get_thumb_type("WORLDVIEW"), typ=type(kernel))
+
+        search_props = ["catalogId", "sensor", "maxSunAzimuth", "acquisitionDateStart", "meanSunElevation"]
+        return SearchResponse(self.search(payload), query=payload, thumb=self.get_thumb_type("WORLDVIEW"),
+                              typ=type(kernel), search_props=search_props)
 
     def search_planet(self, typ: Union[SkySatType, ScopeType], bundle: Union[ScopeBundle, SkySatBundle], bounds: dict, time_from: str,
                       time_to: str, **kwargs: Any):
@@ -117,8 +137,9 @@ class SentinelHubCommercialData(BaseCommercialClient):
             payload["data"][0]["dataFilter"][name] = val
 
         enm = "SKYSAT" if type(typ) == SkySatType else "SCOPE"
-
-        return SearchResponse(self.search(payload), payload, thumb=self.get_thumb_type(enm), typ=type(typ))
+        search_props = ["cloud_cover", "snow_ice_percent", "acquired", "pixel_resolution"]
+        return SearchResponse(self.search(payload), query=payload, thumb=self.get_thumb_type(enm), typ=type(typ),
+                              search_props=search_props)
 
     def thumbnail(self, provider_type: ThumbnailType, item_id):
         download_request = DownloadRequest(url=self.service_url + f"/collections/{provider_type}/products/{item_id}/thumbnail",
@@ -151,37 +172,47 @@ class SentinelHubCommercialData(BaseCommercialClient):
         col_id = kwargs.get("collectionId")
         if col_id:
             payload["collectionId"] = col_id
+
+        search_props = ["id", "created", "name", "provider", "sqkm", "status"]
         try:
-            return self._call_job("orders", payload)
+            return SearchResponse(self._call_job("orders", payload), typ="Single", search_props=search_props )
         except:
-            return "Error creating order. Check if collection name already exists."
+            return SearchResponse("", err="Error creating order. Check if collection name already exists.")
 
     def get_orders(self, *args):
         response_info = self.client.get_json_dict(url=self.service_url + "/orders" + self.check_arg(args),
                                                   request_type=RequestType.GET, use_session=True)
+
         response_info = dict(data=[response_info]) if not response_info.get("data") else response_info
-        return SearchResponse(response_info.get("data"), {}, typ="Order")
+        search_props = ["id", "created", "name", "provider", "sqkm", "status"]
+        return SearchResponse(response_info.get("data"), typ="Normal", search_props=search_props)
 
     def delete_order(self, id_order):
         try:
             self.client.get_json(url=self.service_url + "/orders/" + id_order,
-                                             request_type=RequestType.DELETE, use_session=True)
-            return f"Order deleted. {id_order}"
+                                 request_type=RequestType.DELETE, use_session=True)
+            return SearchResponse("", err=f"Order deleted. {id_order}")
         except ValueError:
-            return "Order not found!"
+            return SearchResponse("", err="Order not found!")
 
     def confirm_order(self, id_order):
         try:
-            self.client.get_json(url=self.service_url + "/orders/" + id_order + "/confirm",
+            data = self.client.get_json(url=self.service_url + "/orders/" + id_order + "/confirm",
                                  request_type=RequestType.POST, use_session=True)
-            return f"Order confirmed. {id_order}"
+            search_props = ["id", "created", "name", "provider", "sqkm", "status"]
+            return SearchResponse(data, typ="Single", search_props=search_props)
         except:
-            return "Order not found!"
+            return SearchResponse("", err="Order not found!")
 
     def get_collection(self, payload) -> JsonDict:
         payload = dict(input=payload)
         response_info = self._call_job("orders/searchcompatiblecollections", payload)
-        return SearchResponse(response_info.get("data"), {}, typ="Collection")
+        search_props = ["id", "name", "created"]
+
+        if response_info.get("data"):
+            return SearchResponse(response_info.get("data"), typ="Normal", search_props=search_props)
+        else:
+            return SearchResponse("", err="No collections found")
 
     def check_arg(self, args):
         id = ""

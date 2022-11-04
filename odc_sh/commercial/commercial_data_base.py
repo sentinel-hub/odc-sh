@@ -123,8 +123,8 @@ class AirbusResponseProperties:
 @dataclass(repr=False)
 class BaseAirbusResponse(CommercialResponse): # noqa
 
-    _links: dict[str, dict[str]]
-    geometry: dict[str, List[List[int]]]
+    _links: dict
+    geometry: dict
    # properties: Optional[AirbusResponseProperties]
    # rights: dict[dict, dict, dict]
    # type: str

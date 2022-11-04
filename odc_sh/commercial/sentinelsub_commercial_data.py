@@ -146,7 +146,8 @@ class SentinelHubCommercialData(BaseCommercialClient):
                                                   request_type=RequestType.GET, use_session=True)
         return self.client.download(download_requests=download_request, decode_data=False)
 
-    def order(self, name: str, query: dict, **kwargs):
+    def order(self, name: str, req_query: dict, **kwargs):
+        query = dict(req_query)
         provider = query["provider"]
         if provider == Providers.PLANET.value:
             query['data'][0]["harmonizeTo"] = "NONE"

@@ -5,6 +5,7 @@ import datacube
 import pandas
 import numpy as np
 import xarray as xr
+import rioxarray
 from datacube.api.query import Query
 from datacube.index.hl import prep_eo3
 from sentinelhub import (CRS, BBox, BBoxSplitter, SentinelHubCatalog,
@@ -128,13 +129,13 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         img = np.array(data)
 
         # data are stored as time / latitude (height) / longitude (width)
-        dims = ["time", "lat", "lon"]
-        coords = dict(time=("time", date), lon=("lon", x_array), lat=("lat", y_array))
+        dims = ["time", "y", "x"]
+        coords = dict(time=("time", date), x=("x", x_array), y=("y", y_array))
         if len(band_names) > 1:
             dims.append("bands")
             coords["bands"] = np.array(band_names)
 
-        return xr.DataArray(
+        darray = xr.DataArray(
             data=img,
             dims=dims,
             coords=coords,
@@ -143,6 +144,8 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                 bands=np.array(band_names),
             ),
         )
+        darray = darray.rio.set_crs(str(crs))
+        return darray
     
     def is_sh_source(self, sources):
         for datasets in sources.values:
@@ -349,8 +352,6 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         self, collection, measurements, date, sh_resolution, bbox, crs
     ):
         transform = bbox.get_transform_vector(sh_resolution, sh_resolution)
-        print("CRS")
-        print(crs)
         doc = {
             "id": str(uuid.uuid4()),
             "$schema": "https://schemas.opendatacube.org/dataset",
@@ -472,9 +473,6 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
             else:
                 bands_info = pandas.concat([bands_info, self.dataframe_for_band(col.name, col.bands)]) 
         return bands_info
-    
-        
-    
     
     def get_available_collections(self):
         return filter(lambda col: col.value.bands, DataCollection.get_available_collections())

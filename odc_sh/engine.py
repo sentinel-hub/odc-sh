@@ -6,6 +6,7 @@ import pandas
 import numpy as np
 import xarray as xr
 import rioxarray
+from datetime import datetime
 from datacube.api.query import Query
 from datacube.index.hl import prep_eo3
 from sentinelhub import (CRS, BBox, BBoxSplitter, SentinelHubCatalog,
@@ -186,9 +187,7 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
             [evalscript, responses] = get_evalscript(
                 band_names, band_units, band_sample_types
             )
-
-            list_of_requests.append(
-                build_sentinel_hub_request(
+            req =  build_sentinel_hub_request(
                     self.config,
                     collection,
                     time.date(),
@@ -197,7 +196,9 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                     evalscript,
                     responses,
                 )
-            )
+            print('request:')
+            print(req)
+            list_of_requests.append(req)
 
         list_of_requests = [request.download_list[0] for request in list_of_requests]
 
@@ -313,11 +314,15 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
             print(bbox)
 
             # Generate Datacube dataset documents from SH image data
-            search_iter = get_catalog_results(
-                SentinelHubCatalog(config=self.config), collection, bbox, time
-            )
-            image_metadata_list = list(search_iter)
-            dates = features_to_dates(image_metadata_list)
+            # DEM collections don't have temporal component
+            if not collection.is_timeless:
+                search_iter = get_catalog_results(
+                    SentinelHubCatalog(config=self.config), collection, bbox, time
+                )
+                image_metadata_list = list(search_iter)
+                dates = features_to_dates(image_metadata_list)
+            else:
+                dates = [datetime.today()]
             
             if not dates:
                 raise ValueError(f"No data available for selected period: {time}")
@@ -397,10 +402,16 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         self.config.sh_base_url = collection.service_url
 
         bands = list(self.get_measurements(collection, user_measurements))
-        collection_details = SentinelHubCatalog(config=self.config).get_collection(
-            collection
-        )
-
+        
+        try:
+            collection_details = SentinelHubCatalog(config=self.config).get_collection(
+                collection
+            )
+        except:
+            print('Can not load collection details for {collection.api_id}')
+            collection_details = {"description": collection.api_id, "title": collection.api_id}
+        
+        
         definition = dict(
             name=collection.api_id.replace("-", "_"),
             description=collection_details["description"],

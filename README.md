@@ -4,6 +4,10 @@
 
 install the ODC datacube core library https://github.com/opendatacube/datacube-core. 
 
+`odc-sh` needs to be installed in the Notebook to run. Use pip install:
+
+```pip install git+https://github.com/sentinel-hub/odc-sh.git```
+
 Set the sentinel hub credential available here https://apps.sentinel-hub.com/dashboard/.
 
 Try to run the test examples. To proiduce the datacube call 

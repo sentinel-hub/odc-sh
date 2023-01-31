@@ -6,7 +6,7 @@ install the ODC datacube core library https://github.com/opendatacube/datacube-c
 
 Set the sentinel hub credential available here https://apps.sentinel-hub.com/dashboard/.
 
-Try to run the test examples. To proiduce the datacube call 
+Try to run the test examples. To produce the datacube call 
 
 ```
 resolution = 20  # in meters

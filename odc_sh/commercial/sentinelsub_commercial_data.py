@@ -2,7 +2,7 @@ from tabulate import tabulate
 from sentinelhub.download.models import DownloadRequest
 from sentinelhub.api.base import SentinelHubService
 from typing import Any, Union
-from sentinelhub.type_utils import (JsonDict, Json)
+from sentinelhub.types import (JsonDict, Json)
 from sentinelhub.constants import RequestType
 import geopandas as gpd
 from shapely.geometry import Polygon
@@ -54,7 +54,7 @@ class SearchResponse:
         
         props = self.search_props
         intersects_perc = []
-        if kwargs.get("aoi"):
+        if kwargs.get("aoi") and len(self.data.features) > 0:
             data = gpd.GeoDataFrame.from_features(self.data.features)
             aoi_polygon = Polygon(kwargs.get("aoi"))
             aoi_area = aoi_polygon.area
@@ -62,7 +62,6 @@ class SearchResponse:
             intersects = [geom.intersection(aoi_polygon) for geom in data.geometry]
             intersects_perc = [intersect.area / aoi_area * 100 for intersect in intersects]   
             props.append("aoi_coverage [%]")
-            print(props)
             
         print_data = []
         if self.typ == SkySatType or self.typ == ScopeType:
@@ -76,8 +75,6 @@ class SearchResponse:
             self.search_props[0:0] = ["idx"]
         else:
             print_data = [self.print_fun(self.data, [])]
-
-        print(print_data)    
             
         if print_data:
             print(tabulate(print_data, headers=props))

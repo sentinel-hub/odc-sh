@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from sentinelhub.api.utils import datetime_config
 from typing import List, Optional, TypeVar, Generic, Type, Union
 
-from sentinelhub.type_utils import JsonDict
+from sentinelhub.types import JsonDict
 
 Self = TypeVar("Self")
 

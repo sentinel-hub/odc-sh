@@ -1,4 +1,6 @@
 pandas
+geopandas
+shapely
 numpy
 rasterio
 xarray

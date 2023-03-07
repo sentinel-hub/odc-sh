@@ -4,6 +4,8 @@ from sentinelhub.api.base import SentinelHubService
 from typing import Any, Union
 from sentinelhub.type_utils import (JsonDict, Json)
 from sentinelhub.constants import RequestType
+import geopandas as gpd
+from shapely.geometry import Polygon
 
 from .commercial_data_base import CommercialSearchResponse, ThumbnailType, \
     AirbusConstellation, Providers, ScopeType, ScopeBundle, SkySatBundle, SkySatType, WorldViewKernel
@@ -29,6 +31,18 @@ class SearchResponse:
         else:
             item_ids = [o["id"] for o in self.data]
         return item_ids
+    
+    def print_coverage(self):
+        item_ids = []
+        if self.typ == SkySatType or self.typ == ScopeType:
+            item_ids = [feature["id"] for feature in self.data.features]
+        elif self.typ == AirbusConstellation:
+            item_ids = [feature["properties"]["id"] for feature in self.data.features]
+        elif self.typ == WorldViewKernel:
+            item_ids = [feature["catalogId"] for feature in self.data.features]
+        else:
+            item_ids = [o["id"] for o in self.data]
+        return item_ids
 
     def print_info(self, **kwargs):
         if hasattr(self,"err"):
@@ -37,27 +51,42 @@ class SearchResponse:
 
         if kwargs.get("props"):
             self.search_props = kwargs.get("props")
+        
+        props = self.search_props
+        intersects_perc = []
+        if kwargs.get("aoi"):
+            data = gpd.GeoDataFrame.from_features(self.data.features)
+            aoi_polygon = Polygon(kwargs.get("aoi"))
+            aoi_area = aoi_polygon.area
 
+            intersects = [geom.intersection(aoi_polygon) for geom in data.geometry]
+            intersects_perc = [intersect.area / aoi_area * 100 for intersect in intersects]   
+            props.append("aoi_coverage [%]")
+            print(props)
+            
         print_data = []
         if self.typ == SkySatType or self.typ == ScopeType:
-            print_data = [self.print_fun(feature["properties"], [idx, feature["id"]]) for idx, feature in enumerate(self.data.features)]
+            print_data = [self.print_fun(feature["properties"], [idx, feature["id"]], [intersects_perc[idx] if len(intersects_perc) > 0 else 0]) for idx, feature in enumerate(self.data.features)]
             self.search_props[0:0] = ["idx", "id"]
         elif self.typ == AirbusConstellation or self.typ == WorldViewKernel:
-            print_data = [self.print_fun(feature["properties"], [idx]) for idx, feature in enumerate(self.data.features)]
+            print_data = [self.print_fun(feature["properties"], [idx], [intersects_perc[idx] if len(intersects_perc) > 0 else 0]) for idx, feature in enumerate(self.data.features)]
             self.search_props[0:0] = ["idx"]
         elif self.typ == "Normal":
-            print_data = [self.print_fun(feature, [idx]) for idx, feature in enumerate(self.data)]
+            print_data = [self.print_fun(feature, [idx], [intersects_perc[idx] if len(intersects_perc) > 0 else 0]) for idx, feature in enumerate(self.data)]
             self.search_props[0:0] = ["idx"]
         else:
             print_data = [self.print_fun(self.data, [])]
 
+        print(print_data)    
+            
         if print_data:
-            print(tabulate(print_data, headers=self.search_props))
+            print(tabulate(print_data, headers=props))
         else:
             print("No data found.")
-
-    def print_fun(self, ft, idx):
-        return idx + [*list(map(lambda h: ft.get(h), self.search_props))]
+        
+            
+    def print_fun(self, ft, idx, aoi_coverage):
+        return idx + [*list(map(lambda h: ft.get(h), self.search_props))] + aoi_coverage
 
 
 class BaseCommercialClient(SentinelHubService):

@@ -93,7 +93,7 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                 sh_maxcc = dataset.metadata_doc["properties"]["sh_maxcc"]
 
                 print(
-                    f"longitude: {x1}, {x2}; latitude: {y1}, {y2}; resolution: {sh_resolution} m; crs: {crs}; time: {time.date()} "
+                    f"longitude: {x1}, {x2}; latitude: {y1}, {y2}; resolution: {sh_resolution} m; crs: {crs}; time: {time.date()}; reasmpling: {sh_resampling}, max cloud coverage: {sh_maxcc}"
                 )
 
                 time_slice = self.load_sentinel_hub_data(

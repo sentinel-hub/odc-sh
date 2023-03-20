@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List
 
-from sentinelhub import DataCollection, SentinelHubRequest, parse_time
+from sentinelhub import DataCollection, SentinelHubRequest, MosaickingOrder, ResamplingType, parse_time
 
 
 def features_to_dates(features: List[Dict[str, Any]]):
@@ -114,7 +114,7 @@ def get_evalscript(band_names, band_units, band_sample_types=None):
 
 
 def build_sentinel_hub_request(
-    config, collection, date, size, bbox, evalscript, responses
+    config, collection, date, size, bbox, evalscript, responses, resempling, maxcc
 ):
     return SentinelHubRequest(
         evalscript=evalscript,
@@ -122,7 +122,10 @@ def build_sentinel_hub_request(
             SentinelHubRequest.input_data(
                 data_collection=collection,
                 time_interval=(f"{date}T00:00:00Z", f"{date}T23:59:59Z"),
-                mosaicking_order="mostRecent",
+                mosaicking_order=MosaickingOrder.MOST_RECENT,
+                upsampling=resempling,
+                downsampling=resempling,
+                maxcc=maxcc
             )
         ],
         responses=responses,

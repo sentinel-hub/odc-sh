@@ -11,7 +11,7 @@ from datacube.api.query import Query
 from datacube.index.hl import prep_eo3
 from sentinelhub import (CRS, BBox, BBoxSplitter, SentinelHubCatalog,
                          SentinelHubDownloadClient, SHConfig, SentinelHubBYOC,
-                         bbox_to_dimensions, DataCollection, Geometry)
+                         bbox_to_dimensions, DataCollection, Geometry, ResamplingType)
 
 from sentinelhub.data_collections import DataCollectionDefinition, ServiceUrl
 from sentinelhub.data_collections_bands import Band, Unit
@@ -89,6 +89,8 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                 band_sample_types = [m.dtype for m in bands]
 
                 collection = dataset.metadata_doc["properties"]["sh_collection"]
+                sh_resampling = dataset.metadata_doc["properties"]["sh_resampling"]
+                sh_maxcc = dataset.metadata_doc["properties"]["sh_maxcc"]
 
                 print(
                     f"longitude: {x1}, {x2}; latitude: {y1}, {y2}; resolution: {sh_resolution} m; crs: {crs}; time: {time.date()} "
@@ -102,7 +104,9 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                     band_names,
                     band_units,
                     band_sample_types,
-                    crs
+                    crs,
+                    sh_resampling,
+                    sh_maxcc
                 )
                 data.append(time_slice)
                 dates.append(np.datetime64(time))
@@ -164,7 +168,9 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         band_names,
         band_units,
         band_sample_types,
-        crs=CRS.WGS84
+        crs=CRS.WGS84,
+        resempling = ResamplingType.NEAREST,
+        maxcc=1.0
     ):
 
         # calculate
@@ -195,9 +201,9 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                     bbox,
                     evalscript,
                     responses,
+                    resempling,
+                    maxcc
                 )
-            print('request:')
-            print(req)
             list_of_requests.append(req)
 
         list_of_requests = [request.download_list[0] for request in list_of_requests]
@@ -258,7 +264,9 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
         :param time: (min, max)  temporal interval of the desired data
         :param measurements: only defined measurements will be downloaded. If not specified, all the bands will be
                              included in the datacube
-        :param sh_resolution: only return datasets that have locations
+        :param sh_resolution: define resolution of sh data (in [m])
+        :param sh_resampling: define type of linear interpolation of data (default is ResamplingType.NEAREST)
+        :param sh_maxcc: define max cloud coverage of the loaded data [0.0 - 1.0]  (default is 1.0)
         :param search_terms: additional search parameters
         :param limit: Default number of day slices to be loaded
         :return: A generated list of datacube.model.Dataset objects.
@@ -285,6 +293,8 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
             crs = CRS.ogc_string(search_terms['crs']) if 'crs' in search_terms.keys() else str(CRS.WGS84)
             user_measurements = search_terms['measurements'] if 'measurements' in search_terms.keys() else None
             sh_resolution = search_terms['sh_resolution'] if 'sh_resolution' in search_terms.keys() else None
+            sh_resampling = search_terms['sh_resampling'] if 'sh_resampling' in search_terms.keys() else None
+            sh_maxcc = search_terms['sh_maxcc'] if 'sh_maxcc' in search_terms.keys() else None
 
             if not sh_resolution:
                 raise ValueError("sh_resolution (m) is not defined")
@@ -311,8 +321,6 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                 collection, user_measurements, sh_resolution
             )
 
-            print(bbox)
-
             # Generate Datacube dataset documents from SH image data
             # DEM collections don't have temporal component
             if not collection.is_timeless:
@@ -335,6 +343,8 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                         sh_resolution,
                         bbox,
                         crs,
+                        sh_resampling,
+                        sh_maxcc
                 )
                 ds_meta = prep_eo3(dataset_metadata)
                 dataset = datacube.model.Dataset(query.product, ds_meta, uris="")
@@ -354,7 +364,7 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                              "Check https://sentinelhub-py.readthedocs.io/en/latest/configure.html for more info.")
 
     def make_img_doc(
-        self, collection, measurements, date, sh_resolution, bbox, crs
+        self, collection, measurements, date, sh_resolution, bbox, crs, resampling = ResamplingType.NEAREST, sh_maxcc = 1.0
     ):
         transform = bbox.get_transform_vector(sh_resolution, sh_resolution)
         doc = {
@@ -368,6 +378,8 @@ class Datacube(datacube.Datacube, metaclass=Singleton):
                 "datetime": date,
                 "sh_resolution": sh_resolution,
                 "sh_collection": collection,
+                "sh_resampling": resampling,
+                "sh_maxcc": sh_maxcc,
             },
             "geometry": bbox.geojson,
             "measurements": measurements,

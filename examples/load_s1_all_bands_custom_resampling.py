@@ -22,7 +22,7 @@ latitude = (41.590797, 42.218348)
 
 time = ("2019-01-01", "2019-01-04")
 
-dc.list_products
+dc.list_sh_products
 
 ds = dc.load(
     product=DataCollection.SENTINEL1_IW,

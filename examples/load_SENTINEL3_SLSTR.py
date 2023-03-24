@@ -13,7 +13,8 @@ if not sh_client_secret:
 
 dc = engine.Datacube(sh_client_id=sh_client_id, sh_client_secret=sh_client_secret)
 
-p = dc.list_products()
+print("Available SH products:")
+print(dc.list_sh_products())
 
 resolution = 100  # in meters
 longitude = (10.259838, 10.367656)

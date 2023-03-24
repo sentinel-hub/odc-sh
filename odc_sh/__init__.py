@@ -15,6 +15,6 @@ from .commercial.commercial_data_base import (
 )
 
 
-__version__ = "1.0.7"
+__version__ = "1.0.8"
 
 __all__ = "Datacube"

@@ -54,9 +54,11 @@ class SearchResponse:
         
         props = self.search_props
         intersects_perc = []
-        if kwargs.get("aoi") and len(self.data.features) > 0:
+        aoi = kwargs.get("aoi")
+        if aoi and len(self.data.features) > 0:
             data = gpd.GeoDataFrame.from_features(self.data.features)
-            aoi_polygon = Polygon(kwargs.get("aoi"))
+            
+            aoi_polygon = Polygon(aoi["coordinates"][0]) if type(aoi) is dict else Polygon(aoi)
             aoi_area = aoi_polygon.area
 
             intersects = [geom.intersection(aoi_polygon) for geom in data.geometry]

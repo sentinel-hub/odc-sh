@@ -1,6 +1,6 @@
 from .engine import Datacube
 
-from .commercial.sentinelsub_commercial_data import SentinelHubCommercialData
+from .commercial.sentinelhub_commercial_data import SentinelHubCommercialData
 from .commercial.commercial_data_base import (
     CommercialSearchResponse, 
     Providers, 

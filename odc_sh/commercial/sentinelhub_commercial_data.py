@@ -52,8 +52,8 @@ class SearchResponse:
         if kwargs.get("props"):
             self.search_props = kwargs.get("props")
         
-        props = self.search_props
         intersects_perc = []
+        props = self.search_props.copy()
         aoi = kwargs.get("aoi")
         if aoi and len(self.data.features) > 0:
             data = gpd.GeoDataFrame.from_features(self.data.features)
@@ -65,16 +65,17 @@ class SearchResponse:
             intersects_perc = [intersect.area / aoi_area * 100 for intersect in intersects]   
             props.append("aoi_coverage [%]")
             
+            
         print_data = []
         if self.typ == SkySatType or self.typ == ScopeType:
-            print_data = [self.print_fun(feature["properties"], [idx, feature["id"]], [intersects_perc[idx] if len(intersects_perc) > 0 else 0]) for idx, feature in enumerate(self.data.features)]
-            self.search_props[0:0] = ["idx", "id"]
+            print_data = [self.print_fun(feature["properties"], [idx, feature["id"]], intersects_perc[idx] if len(intersects_perc) > 0 else -1) for idx, feature in enumerate(self.data.features)]
+            props[0:0] = ["idx", "id"]
         elif self.typ == AirbusConstellation or self.typ == WorldViewKernel:
-            print_data = [self.print_fun(feature["properties"], [idx], [intersects_perc[idx] if len(intersects_perc) > 0 else 0]) for idx, feature in enumerate(self.data.features)]
-            self.search_props[0:0] = ["idx"]
+            print_data = [self.print_fun(feature["properties"], [idx], intersects_perc[idx] if len(intersects_perc) > 0 else -1) for idx, feature in enumerate(self.data.features)]
+            props[0:0] = ["idx"]
         elif self.typ == "Normal":
-            print_data = [self.print_fun(feature, [idx], [intersects_perc[idx] if len(intersects_perc) > 0 else 0]) for idx, feature in enumerate(self.data)]
-            self.search_props[0:0] = ["idx"]
+            print_data = [self.print_fun(feature, [idx], intersects_perc[idx] if len(intersects_perc) > 0 else -1) for idx, feature in enumerate(self.data)]
+            props[0:0] = ["idx"]
         else:
             print_data = [self.print_fun(self.data, [])]
             
@@ -85,7 +86,10 @@ class SearchResponse:
         
             
     def print_fun(self, ft, idx, aoi_coverage):
-        return idx + [*list(map(lambda h: ft.get(h), self.search_props))] + aoi_coverage
+        vals = idx + [*list(map(lambda h: ft.get(h), self.search_props))]            
+        if aoi_coverage and aoi_coverage >= 0: 
+            vals.append(aoi_coverage)
+        return vals
 
 
 class BaseCommercialClient(SentinelHubService):

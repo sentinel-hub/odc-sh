@@ -5,5 +5,5 @@ numpy
 rasterio
 xarray
 datacube @ git+https://github.com/opendatacube/datacube-core.git
-sentinelhub>=3.8.4
+sentinelhub>=3.10.0
 tabulate

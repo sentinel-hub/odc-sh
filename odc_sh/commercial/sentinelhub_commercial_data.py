@@ -165,7 +165,8 @@ class SentinelHubCommercialData(BaseCommercialClient):
 
     def quotas(self, *args):
         res = self.client.get_json_dict(
-            url=self.service_url + "/quotas" + self.check_arg(args), use_session=True
+            url=self.service_url + "/accountquotas" + self.check_arg(args),
+            use_session=True,
         )
 
         search_props = ["collectionId", "quotaSqkm", "quotaUsed"]

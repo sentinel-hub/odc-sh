@@ -249,7 +249,7 @@ class SentinelHubCommercialData(BaseCommercialClient):
         **kwargs: Any,
     ):
         planet_api_key = (
-            kwargs.get("planestApiKey") if kwargs.get("planetApiKey") else ""
+            kwargs.get("planetApiKey") if kwargs.get("planetApiKey") else ""
         )
         kwargs = dict(kwargs, timeRange={"from": time_from, "to": time_to})
         payload = dict(

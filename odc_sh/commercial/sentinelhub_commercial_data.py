@@ -117,7 +117,7 @@ class SearchResponse:
         else:
             print("No data found.")
 
-    def print_fun(self, ft, idx, aoi_coverage):
+    def print_fun(self, ft, idx, aoi_coverage=None):
         vals = idx + [*list(map(lambda h: ft.get(h), self.search_props))]
         if aoi_coverage and aoi_coverage >= 0:
             vals.append(aoi_coverage)

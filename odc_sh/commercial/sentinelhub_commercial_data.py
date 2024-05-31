@@ -296,6 +296,10 @@ class SentinelHubCommercialData(BaseCommercialClient):
         provider = query["provider"]
         if provider == Providers.PLANET.value:
             query["data"][0]["harmonizeTo"] = "NONE"
+            if not "planetApiKey" in query.keys():
+                raise ValueError(
+                    "Planet API key is required for ordering, add to query."
+                )
 
         # Add selected item_ids
         item_ids = kwargs.get("item_ids")

@@ -117,7 +117,7 @@ class SearchResponse:
         else:
             print("No data found.")
 
-    def print_fun(self, ft, idx, aoi_coverage):
+    def print_fun(self, ft, idx, aoi_coverage=None):
         vals = idx + [*list(map(lambda h: ft.get(h), self.search_props))]
         if aoi_coverage and aoi_coverage >= 0:
             vals.append(aoi_coverage)
@@ -249,7 +249,7 @@ class SentinelHubCommercialData(BaseCommercialClient):
         **kwargs: Any,
     ):
         planet_api_key = (
-            kwargs.get("planestApiKey") if kwargs.get("planetApiKey") else ""
+            kwargs.get("planetApiKey") if kwargs.get("planetApiKey") else ""
         )
         kwargs = dict(kwargs, timeRange={"from": time_from, "to": time_to})
         payload = dict(
@@ -296,6 +296,10 @@ class SentinelHubCommercialData(BaseCommercialClient):
         provider = query["provider"]
         if provider == Providers.PLANET.value:
             query["data"][0]["harmonizeTo"] = "NONE"
+            if not "planetApiKey" in query.keys():
+                raise ValueError(
+                    "Planet API key is required for ordering, add to query."
+                )
 
         # Add selected item_ids
         item_ids = kwargs.get("item_ids")
